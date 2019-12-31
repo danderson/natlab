@@ -9,18 +9,6 @@ type UDPAddr struct {
 	Port uint16
 }
 
-type UDPTuple struct {
-	Src UDPAddr
-	Dst UDPAddr
-}
-
-func (u UDPTuple) Flip() UDPTuple {
-	return UDPTuple{
-		Src: u.Dst,
-		Dst: u.Src,
-	}
-}
-
 type Packet struct {
 	bytes []byte
 	// FIXME: support for mangling ICMP packets that have UDP4 error payloads

@@ -35,11 +35,6 @@ func (e *ctEntry) extend() {
 	e.Deadline = time.Now().Add(120 * time.Second)
 }
 
-type ConntrackKey interface {
-	OutboundKey(p *Packet) UDPTuple
-	InboundKey(p *Packet) UDPTuple
-}
-
 type addressAndPortDependentNAT struct {
 	publicIP net.IP
 	// byOriginal matches on outbound packet 4-tuples.
