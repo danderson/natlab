@@ -35,7 +35,7 @@ func (e *ctEntry) extend() {
 	e.Deadline = time.Now().Add(120 * time.Second)
 }
 
-type addressAndPortDependentNAT struct {
+type endpointIndependentNAT struct {
 	publicIP net.IP
 	// byOriginal matches on outbound packet 4-tuples.
 	byOriginal map[UDPAddr]*ctEntry
@@ -44,14 +44,14 @@ type addressAndPortDependentNAT struct {
 }
 
 func NewAddressAndPortDependentNAT(publicIP net.IP) Conntrack {
-	return &addressAndPortDependentNAT{
+	return &endpointIndependentNAT{
 		publicIP:   publicIP,
 		byOriginal: map[UDPAddr]*ctEntry{},
 		byMapped:   map[UDPAddr]*ctEntry{},
 	}
 }
 
-func (n addressAndPortDependentNAT) MangleOutbound(p *Packet) Verdict {
+func (n endpointIndependentNAT) MangleOutbound(p *Packet) Verdict {
 	key := p.UDPSrcAddr()
 
 	ct := n.byOriginal[key]
@@ -84,7 +84,7 @@ func (n addressAndPortDependentNAT) MangleOutbound(p *Packet) Verdict {
 	return VerdictMangle
 }
 
-func (n addressAndPortDependentNAT) MangleInbound(p *Packet) Verdict {
+func (n endpointIndependentNAT) MangleInbound(p *Packet) Verdict {
 	key := p.UDPDstAddr()
 
 	ct := n.byMapped[key]
@@ -100,7 +100,7 @@ func (n addressAndPortDependentNAT) MangleInbound(p *Packet) Verdict {
 	return VerdictMangle
 }
 
-func (n addressAndPortDependentNAT) deleteMapping(ct *ctEntry) {
+func (n endpointIndependentNAT) deleteMapping(ct *ctEntry) {
 	delete(n.byOriginal, ct.Original)
 	delete(n.byMapped, ct.Mapped)
 	ct.ParkedPort.Close()
