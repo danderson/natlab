@@ -1,0 +1,67 @@
+version: "2.1"
+services:
+  nat1:
+    image: natlab:testing
+    cap_add:
+    - NET_ADMIN
+    networks:
+      lan1:
+      wan:
+
+  nat2:
+    image: natlab:testing
+    cap_add:
+    - NET_ADMIN
+    networks:
+      lan2:
+      wan:
+
+  client1:
+    image: natlab:testing
+    cap_add:
+    - NET_ADMIN
+    networks:
+      lan1:
+    command: ["/bin/bash", "-c", "sleep 180000"]
+
+  client2:
+    image: natlab:testing
+    cap_add:
+    - NET_ADMIN
+    networks:
+      lan2:
+    command: ["/bin/bash", "-c", "sleep 180000"]
+
+networks:
+  lan1:
+    enable_ipv6: true
+    ipam:
+      config:
+      - subnet: 100.70.0.0/24
+        ip_range: 100.70.0.0/24
+      - subnet: fd00:feca:1::/120
+        ip_range: fd00:feca:1::/120
+        gateway: fd00:feca:1::1
+    internal: true
+
+  lan2:
+    enable_ipv6: true
+    ipam:
+      config:
+      - subnet: 100.71.0.0/24
+        ip_range: 100.71.0.0/24
+      - subnet: fd00:feca:2::/120
+        ip_range: fd00:feca:2::/120
+        gateway: fd00:feca:2::1
+    internal: true
+
+  wan:
+    enable_ipv6: true
+    ipam:
+      config:
+      - subnet: 100.100.0.0/24
+        ip_range: 100.100.0.0/24
+        gateway: 100.100.0.1
+      - subnet: fd00:feca:100::/120
+        ip_range: fd00:feca:100::/120
+        gateway: fd00:feca:100::1
