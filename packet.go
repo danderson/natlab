@@ -61,6 +61,7 @@ func (p Packet) UDPSrcAddr() UDPAddr {
 func (p Packet) SetUDPSrcAddr(u UDPAddr) {
 	copy(p.bytes[12:16], u.IPv4[:])
 	binary.BigEndian.PutUint16(p.udpSrcPort(), u.Port)
+	p.recomputeChecksum()
 }
 
 func (p Packet) UDPDstAddr() UDPAddr {
@@ -74,6 +75,7 @@ func (p Packet) UDPDstAddr() UDPAddr {
 func (p Packet) SetUDPDstAddr(u UDPAddr) {
 	copy(p.bytes[16:20], u.IPv4[:])
 	binary.BigEndian.PutUint16(p.udpDstPort(), u.Port)
+	p.recomputeChecksum()
 }
 
 func (p Packet) udpSrcPort() []byte {
