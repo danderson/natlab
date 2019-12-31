@@ -42,7 +42,7 @@ type endpointIndependentNAT struct {
 	byOriginal map[UDPAddr]*ctEntry
 	// byMapped matches on inbound packet 4-tuples
 	byMapped    map[UDPAddr]*ctEntry
-	portManager *portmanager.PortManager
+	portManager portmanager.PortManager
 }
 
 func NewAddressAndPortDependentNAT(publicIP net.IP) Conntrack {

@@ -5,8 +5,13 @@ import (
 	"net"
 )
 
+// A PortManager allocates WAN ip:ports on demand.
+type PortManager interface {
+	Allocate(clientAddr *net.UDPAddr) (port *net.UDPAddr, close func(), err error)
+}
+
 // PortManager allocates WAN UDP ports according to a configurable policy.
-type PortManager struct {
+type ipAndPortRandomizingPortManager struct {
 	wanIPs []net.IP
 	rng    *rand.Rand
 }
@@ -17,15 +22,15 @@ type ipRefcount struct {
 	refcnt int
 }
 
-func New(wanIPs []net.IP) *PortManager {
-	return &PortManager{
+func New(wanIPs []net.IP) PortManager {
+	return &ipAndPortRandomizingPortManager{
 		wanIPs: append([]net.IP(nil), wanIPs...),
 		rng:    NewRandom(),
 	}
 }
 
 // Allocate tries to allocate a WAN ip:port for the given clientAddr.
-func (p *PortManager) Allocate(clientAddr *net.UDPAddr) (port *net.UDPAddr, close func(), err error) {
+func (p *ipAndPortRandomizingPortManager) Allocate(clientAddr *net.UDPAddr) (port *net.UDPAddr, close func(), err error) {
 	// TODO: more policies, right now we're just doing fully
 	// randomized allocation.
 	for {
