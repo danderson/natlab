@@ -2,11 +2,20 @@ package main
 
 import (
 	"encoding/binary"
+	"net"
 )
 
 type UDPAddr struct {
 	IPv4 [4]byte
 	Port uint16
+}
+
+func NewUDPAddr(ip net.IP, port uint16) UDPAddr {
+	ret := UDPAddr{
+		Port: port,
+	}
+	copy(ret.IPv4[:], ip.To4())
+	return ret
 }
 
 type UDPTuple struct {
@@ -55,29 +64,36 @@ func (p Packet) UDPTuple() UDPTuple {
 		panic("not UDP4")
 	}
 
-	ret := UDPTuple{
-		Src: UDPAddr{
-			Port: binary.BigEndian.Uint16(p.udpSrcPort()),
-		},
-		Dst: UDPAddr{
-			Port: binary.BigEndian.Uint16(p.udpDstPort()),
-		},
+	return UDPTuple{
+		Src: p.SrcUDPAddr(),
+		Dst: p.DstUDPAddr(),
 	}
-	copy(ret.Src.IPv4[:], p.bytes[12:16])
-	copy(ret.Dst.IPv4[:], p.bytes[16:20])
+}
+
+func (p Packet) SrcUDPAddr() UDPAddr {
+	ret := UDPAddr{
+		Port: binary.BigEndian.Uint16(p.udpSrcPort()),
+	}
+	copy(ret.IPv4[:], p.bytes[12:16])
 	return ret
 }
 
-func (p Packet) SetUDPTuple(u UDPTuple) {
-	if !p.isUDP4() {
-		panic("not UDP4")
-	}
+func (p Packet) SetSrcUDPAddr(u UDPAddr) {
+	copy(p.bytes[12:16], u.IPv4[:])
+	binary.BigEndian.PutUint16(p.udpSrcPort(), u.Port)
+}
 
-	copy(p.bytes[12:16], u.Src.IPv4[:])
-	copy(p.bytes[16:20], u.Dst.IPv4[:])
-	binary.BigEndian.PutUint16(p.udpSrcPort(), u.Src.Port)
-	binary.BigEndian.PutUint16(p.udpDstPort(), u.Dst.Port)
-	p.recomputeChecksum()
+func (p Packet) DstUDPAddr() UDPAddr {
+	ret := UDPAddr{
+		Port: binary.BigEndian.Uint16(p.udpDstPort()),
+	}
+	copy(ret.IPv4[:], p.bytes[16:20])
+	return ret
+}
+
+func (p Packet) SetDstUDPAddr(u UDPAddr) {
+	copy(p.bytes[16:20], u.IPv4[:])
+	binary.BigEndian.PutUint16(p.udpDstPort(), u.Port)
 }
 
 func (p Packet) udpSrcPort() []byte {
