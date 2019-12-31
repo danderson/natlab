@@ -21,10 +21,10 @@ type Conntrack interface {
 }
 
 type ctEntry struct {
-	Original   UDPAddr
-	Mapped     UDPAddr
-	ParkedPort net.Conn
-	Deadline   time.Time
+	Original UDPAddr
+	Mapped   UDPAddr
+	Close    func()
+	Deadline time.Time
 }
 
 func (e *ctEntry) expired() bool {
@@ -40,14 +40,16 @@ type endpointIndependentNAT struct {
 	// byOriginal matches on outbound packet 4-tuples.
 	byOriginal map[UDPAddr]*ctEntry
 	// byMapped matches on inbound packet 4-tuples
-	byMapped map[UDPAddr]*ctEntry
+	byMapped    map[UDPAddr]*ctEntry
+	portManager *PortManager
 }
 
 func NewAddressAndPortDependentNAT(publicIP net.IP) Conntrack {
 	return &endpointIndependentNAT{
-		publicIP:   publicIP,
-		byOriginal: map[UDPAddr]*ctEntry{},
-		byMapped:   map[UDPAddr]*ctEntry{},
+		publicIP:    publicIP,
+		byOriginal:  map[UDPAddr]*ctEntry{},
+		byMapped:    map[UDPAddr]*ctEntry{},
+		portManager: NewPortManager([]net.IP{publicIP}),
 	}
 }
 
@@ -60,7 +62,7 @@ func (n endpointIndependentNAT) MangleOutbound(p *Packet) Verdict {
 		ct = nil
 	}
 	if ct == nil {
-		parked, port, err := parkPort(n.publicIP)
+		mappedAddr, close, err := n.portManager.Allocate(p.UDPSrcAddr())
 		if err != nil {
 			log.Errorf("Failed to park port: %s", err)
 			return VerdictDrop
@@ -68,10 +70,8 @@ func (n endpointIndependentNAT) MangleOutbound(p *Packet) Verdict {
 
 		ct = &ctEntry{
 			Original: key,
-			Mapped: UDPAddr{
-				Port: port,
-			},
-			ParkedPort: parked,
+			Mapped:   mappedAddr,
+			Close:    close,
 		}
 		copy(ct.Mapped.IPv4[:], n.publicIP)
 		ct.extend()
@@ -103,14 +103,5 @@ func (n endpointIndependentNAT) MangleInbound(p *Packet) Verdict {
 func (n endpointIndependentNAT) deleteMapping(ct *ctEntry) {
 	delete(n.byOriginal, ct.Original)
 	delete(n.byMapped, ct.Mapped)
-	ct.ParkedPort.Close()
-}
-
-func parkPort(srcIP net.IP) (net.Conn, uint16, error) {
-	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: srcIP})
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return conn, uint16(conn.LocalAddr().(*net.UDPAddr).Port), nil
+	ct.Close()
 }
