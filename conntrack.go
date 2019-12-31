@@ -21,8 +21,8 @@ type Conntrack interface {
 }
 
 type ctEntry struct {
-	Original   UDPTuple
-	Mapped     UDPTuple
+	Original   UDPAddr
+	Mapped     UDPAddr
 	ParkedPort net.Conn
 	Deadline   time.Time
 }
@@ -43,21 +43,21 @@ type ConntrackKey interface {
 type addressAndPortDependentNAT struct {
 	publicIP net.IP
 	// byOriginal matches on outbound packet 4-tuples.
-	byOriginal map[UDPTuple]*ctEntry
+	byOriginal map[UDPAddr]*ctEntry
 	// byMapped matches on inbound packet 4-tuples
-	byMapped map[UDPTuple]*ctEntry
+	byMapped map[UDPAddr]*ctEntry
 }
 
 func NewAddressAndPortDependentNAT(publicIP net.IP) Conntrack {
 	return &addressAndPortDependentNAT{
 		publicIP:   publicIP,
-		byOriginal: map[UDPTuple]*ctEntry{},
-		byMapped:   map[UDPTuple]*ctEntry{},
+		byOriginal: map[UDPAddr]*ctEntry{},
+		byMapped:   map[UDPAddr]*ctEntry{},
 	}
 }
 
 func (n addressAndPortDependentNAT) MangleOutbound(p *Packet) Verdict {
-	key := p.UDPTuple()
+	key := p.UDPSrcAddr()
 
 	ct := n.byOriginal[key]
 	if ct != nil && ct.expired() {
@@ -73,27 +73,24 @@ func (n addressAndPortDependentNAT) MangleOutbound(p *Packet) Verdict {
 
 		ct = &ctEntry{
 			Original: key,
-			Mapped: UDPTuple{
-				Src: UDPAddr{
-					Port: port,
-				},
-				Dst: key.Dst,
+			Mapped: UDPAddr{
+				Port: port,
 			},
 			ParkedPort: parked,
 		}
-		copy(ct.Mapped.Src.IPv4[:], n.publicIP)
+		copy(ct.Mapped.IPv4[:], n.publicIP)
 		ct.extend()
-		n.byOriginal[key] = ct
-		n.byMapped[ct.Mapped.Flip()] = ct
+		n.byOriginal[ct.Original] = ct
+		n.byMapped[ct.Mapped] = ct
 	}
 
-	p.SetUDPTuple(ct.Mapped)
+	p.SetUDPSrcAddr(ct.Mapped)
 
 	return VerdictMangle
 }
 
 func (n addressAndPortDependentNAT) MangleInbound(p *Packet) Verdict {
-	key := p.UDPTuple()
+	key := p.UDPDstAddr()
 
 	ct := n.byMapped[key]
 	if ct == nil {
@@ -104,13 +101,13 @@ func (n addressAndPortDependentNAT) MangleInbound(p *Packet) Verdict {
 		return VerdictDrop
 	}
 	ct.extend()
-	p.SetUDPTuple(ct.Original.Flip())
+	p.SetUDPDstAddr(ct.Original)
 	return VerdictMangle
 }
 
 func (n addressAndPortDependentNAT) deleteMapping(ct *ctEntry) {
 	delete(n.byOriginal, ct.Original)
-	delete(n.byMapped, ct.Mapped.Flip())
+	delete(n.byMapped, ct.Mapped)
 	ct.ParkedPort.Close()
 }
 
