@@ -5,6 +5,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"go.universe.tf/natlab/portmanager"
 )
 
 type Verdict int
@@ -41,7 +42,7 @@ type endpointIndependentNAT struct {
 	byOriginal map[UDPAddr]*ctEntry
 	// byMapped matches on inbound packet 4-tuples
 	byMapped    map[UDPAddr]*ctEntry
-	portManager *PortManager
+	portManager *portmanager.PortManager
 }
 
 func NewAddressAndPortDependentNAT(publicIP net.IP) Conntrack {
@@ -49,7 +50,7 @@ func NewAddressAndPortDependentNAT(publicIP net.IP) Conntrack {
 		publicIP:    publicIP,
 		byOriginal:  map[UDPAddr]*ctEntry{},
 		byMapped:    map[UDPAddr]*ctEntry{},
-		portManager: NewPortManager([]net.IP{publicIP}),
+		portManager: portmanager.New([]net.IP{publicIP}),
 	}
 }
 
@@ -62,7 +63,7 @@ func (n endpointIndependentNAT) MangleOutbound(p *Packet) Verdict {
 		ct = nil
 	}
 	if ct == nil {
-		mappedAddr, close, err := n.portManager.Allocate(p.UDPSrcAddr())
+		mappedAddr, close, err := n.portManager.Allocate(p.UDPSrcAddr().ToNetUDPAddr())
 		if err != nil {
 			log.Errorf("Failed to park port: %s", err)
 			return VerdictDrop
@@ -70,7 +71,7 @@ func (n endpointIndependentNAT) MangleOutbound(p *Packet) Verdict {
 
 		ct = &ctEntry{
 			Original: key,
-			Mapped:   mappedAddr,
+			Mapped:   FromNetUDPAddr(mappedAddr),
 			Close:    close,
 		}
 		copy(ct.Mapped.IPv4[:], n.publicIP)

@@ -10,9 +10,16 @@ type UDPAddr struct {
 	Port uint16
 }
 
-func (u *UDPAddr) String() string {
+func (u UDPAddr) String() string {
 	a := net.UDPAddr{IP: net.IP(u.IPv4[:]), Port: int(u.Port)}
 	return a.String()
+}
+
+func (u UDPAddr) ToNetUDPAddr() *net.UDPAddr {
+	return &net.UDPAddr{
+		IP:   append(net.IP(nil), u.IPv4[:]...),
+		Port: int(u.Port),
+	}
 }
 
 func FromNetUDPAddr(a *net.UDPAddr) UDPAddr {
