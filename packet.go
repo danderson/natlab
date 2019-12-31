@@ -86,6 +86,10 @@ func (p Packet) udpDstPort() []byte {
 	return p.bytes[p.ipHdrLen()+2 : p.ipHdrLen()+4]
 }
 
+func (p Packet) udpChecksum() []byte {
+	return p.bytes[p.ipHdrLen()+6 : p.ipHdrLen()+8]
+}
+
 func (p Packet) ipHdrLen() int {
 	return int(p.bytes[0]&0xF) * 4
 }
@@ -105,4 +109,8 @@ func (p Packet) recomputeChecksum() {
 	// ... and in some cases, carry increments cause another carry.
 	sum = (sum & 0xFFFF) + (sum >> 16)
 	binary.BigEndian.PutUint16(p.bytes[10:12], ^uint16(sum))
+
+	// Also zero out the UDP checksum, because I can't be bothered to
+	// recompute it.
+	binary.BigEndian.PutUint16(p.udpChecksum(), 0)
 }
