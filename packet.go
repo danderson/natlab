@@ -2,11 +2,25 @@ package main
 
 import (
 	"encoding/binary"
+	"net"
 )
 
 type UDPAddr struct {
 	IPv4 [4]byte
 	Port uint16
+}
+
+func (u *UDPAddr) String() string {
+	a := net.UDPAddr{IP: net.IP(u.IPv4[:]), Port: int(u.Port)}
+	return a.String()
+}
+
+func FromNetUDPAddr(a *net.UDPAddr) UDPAddr {
+	ret := UDPAddr{
+		Port: uint16(a.Port),
+	}
+	copy(ret.IPv4[:], a.IP.To4())
+	return ret
 }
 
 type Packet struct {
