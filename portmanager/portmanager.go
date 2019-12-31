@@ -31,13 +31,22 @@ func (p *PortManager) Allocate(clientAddr *net.UDPAddr) (port *net.UDPAddr, clos
 	for {
 		publicIP := p.wanIPs[p.rng.Intn(len(p.wanIPs))]
 		port := 1024 + p.rng.Intn(64511)
-		conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: publicIP, Port: port})
+		addr, close, err := p.AllocateAddr(&net.UDPAddr{IP: publicIP, Port: port})
 		if err != nil {
 			// TODO: log?
 			continue
 		}
 
-		addr := conn.LocalAddr().(*net.UDPAddr)
-		return addr, func() { conn.Close() }, nil
+		return addr, close, nil
 	}
+}
+
+// AllocateAddr tries to allocate exactly the requested address.
+func (p *PortManager) AllocateAddr(wantedAddr *net.UDPAddr) (port *net.UDPAddr, close func(), err error) {
+	conn, err := net.ListenUDP("udp4", wantedAddr)
+	if err != nil {
+		return nil, nil, err
+	}
+	addr := conn.LocalAddr().(*net.UDPAddr)
+	return addr, func() { conn.Close() }, nil
 }
