@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"time"
 
@@ -28,29 +29,15 @@ func nat(c *cli.Context) error {
 	}
 	defer queue.Close()
 
+	wanIPs, err := getWANIPs(*wanIf)
+	if err != nil {
+		log.Fatalf("Getting WAN IPs: %s", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	iface, err := net.InterfaceByName(*wanIf)
-	if err != nil {
-		log.Fatalf("Getting %s interface info: %s", *wanIf, err)
-	}
-
-	var publicAddr net.IP
-	addrs, err := iface.Addrs()
-	if err != nil {
-		log.Fatalf("Getting %s interface addrs: %s", *wanIf, err)
-	}
-	for _, addr := range addrs {
-		ipaddr := addr.(*net.IPAddr)
-		if ipaddr == nil || ipaddr.IP.To4() == nil {
-			continue
-		}
-		publicAddr = ipaddr.IP
-		break
-	}
-
-	conntrack := NewAddressAndPortDependentNAT(publicAddr)
+	translator := NewAddressAndPortDependentNAT(wanIPs)
 
 	process := func(a nfqueue.Attribute) int {
 		pkt := NewPacket(*a.Payload)
@@ -64,20 +51,20 @@ func nat(c *cli.Context) error {
 			panic(err)
 		}
 
-		verdict := VerdictDrop
+		verdict := TranslatorVerdictDrop
 		switch intf.Name {
 		case *lanIf:
-			verdict = conntrack.MangleOutbound(pkt)
+			verdict = translator.TranslateOutUDP(*a.Payload)
 		case *wanIf:
-			verdict = conntrack.MangleInbound(pkt)
+			verdict = translator.TranslateInUDP(*a.Payload)
 		}
 
 		switch verdict {
-		case VerdictAccept:
+		case TranslatorVerdictAccept:
 			queue.SetVerdict(*a.PacketID, nfqueue.NfAccept)
-		case VerdictDrop:
+		case TranslatorVerdictDrop:
 			queue.SetVerdict(*a.PacketID, nfqueue.NfDrop)
-		case VerdictMangle:
+		case TranslatorVerdictMangle:
 			queue.SetVerdictModPacket(*a.PacketID, nfqueue.NfAccept, *a.Payload)
 		}
 
@@ -93,4 +80,26 @@ func nat(c *cli.Context) error {
 	log.Info("Exiting")
 
 	return nil
+}
+
+func getWANIPs(ifName string) ([]net.IP, error) {
+	iface, err := net.InterfaceByName(ifName)
+	if err != nil {
+		return nil, fmt.Errorf("Getting %s interface info: %s", ifName, err)
+	}
+
+	ret := []net.IP{}
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return nil, fmt.Errorf("Getting %s interface addrs: %s", ifName, err)
+	}
+	for _, addr := range addrs {
+		ipaddr := addr.(*net.IPAddr)
+		if ipaddr == nil || ipaddr.IP.To4() == nil || !ipaddr.IP.IsGlobalUnicast() {
+			continue
+		}
+		ret = append(ret, ipaddr.IP)
+	}
+
+	return ret, nil
 }

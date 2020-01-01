@@ -8,17 +8,20 @@ import (
 	"go.universe.tf/natlab/portmanager"
 )
 
-type Verdict int
+type TranslatorVerdict int
 
 const (
-	VerdictAccept Verdict = iota
-	VerdictMangle
-	VerdictDrop
+	TranslatorVerdictAccept TranslatorVerdict = iota
+	TranslatorVerdictMangle
+	TranslatorVerdictDrop
 )
 
-type Conntrack interface {
-	MangleOutbound(p *Packet) Verdict
-	MangleInbound(p *Packet) Verdict
+// Translator is the top-level interface. Packets get fed in, may be
+// mutated, and the verdict dictates whether the packet makes it off
+// the machine.
+type Translator interface {
+	TranslateOutUDP(packet []byte) TranslatorVerdict
+	TranslateInUDP(packet []byte) TranslatorVerdict
 }
 
 type ctEntry struct {
@@ -42,19 +45,23 @@ type endpointIndependentNAT struct {
 	byOriginal map[UDPAddr]*ctEntry
 	// byMapped matches on inbound packet 4-tuples
 	byMapped    map[UDPAddr]*ctEntry
-	portManager portmanager.PortManager
+	portManager *portmanager.PortManager
 }
 
-func NewAddressAndPortDependentNAT(publicIP net.IP) Conntrack {
+func NewAddressAndPortDependentNAT(wanIPs []net.IP) Translator {
+	cfg := &portmanager.Config{
+		WANIPs: wanIPs,
+	}
+
 	return &endpointIndependentNAT{
-		publicIP:    publicIP,
 		byOriginal:  map[UDPAddr]*ctEntry{},
 		byMapped:    map[UDPAddr]*ctEntry{},
-		portManager: portmanager.New([]net.IP{publicIP}),
+		portManager: portmanager.New(cfg),
 	}
 }
 
-func (n endpointIndependentNAT) MangleOutbound(p *Packet) Verdict {
+func (n endpointIndependentNAT) TranslateOutUDP(bs []byte) TranslatorVerdict {
+	p := NewPacket(bs)
 	key := p.UDPSrcAddr()
 
 	ct := n.byOriginal[key]
@@ -63,10 +70,10 @@ func (n endpointIndependentNAT) MangleOutbound(p *Packet) Verdict {
 		ct = nil
 	}
 	if ct == nil {
-		mappedAddr, close, err := n.portManager.Allocate(p.UDPSrcAddr().ToNetUDPAddr())
+		mappedAddr, close, err := n.portManager.AllocateUDP(p.UDPSrcAddr().ToNetUDPAddr())
 		if err != nil {
 			log.Errorf("Failed to park port: %s", err)
-			return VerdictDrop
+			return TranslatorVerdictDrop
 		}
 
 		ct = &ctEntry{
@@ -74,7 +81,6 @@ func (n endpointIndependentNAT) MangleOutbound(p *Packet) Verdict {
 			Mapped:   FromNetUDPAddr(mappedAddr),
 			Close:    close,
 		}
-		copy(ct.Mapped.IPv4[:], n.publicIP)
 		ct.extend()
 		n.byOriginal[ct.Original] = ct
 		n.byMapped[ct.Mapped] = ct
@@ -82,23 +88,24 @@ func (n endpointIndependentNAT) MangleOutbound(p *Packet) Verdict {
 
 	p.SetUDPSrcAddr(ct.Mapped)
 
-	return VerdictMangle
+	return TranslatorVerdictMangle
 }
 
-func (n endpointIndependentNAT) MangleInbound(p *Packet) Verdict {
+func (n endpointIndependentNAT) TranslateInUDP(bs []byte) TranslatorVerdict {
+	p := NewPacket(bs)
 	key := p.UDPDstAddr()
 
 	ct := n.byMapped[key]
 	if ct == nil {
-		return VerdictDrop
+		return TranslatorVerdictDrop
 	}
 	if ct.expired() {
 		n.deleteMapping(ct)
-		return VerdictDrop
+		return TranslatorVerdictDrop
 	}
 	ct.extend()
 	p.SetUDPDstAddr(ct.Original)
-	return VerdictMangle
+	return TranslatorVerdictMangle
 }
 
 func (n endpointIndependentNAT) deleteMapping(ct *ctEntry) {
