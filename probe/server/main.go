@@ -10,7 +10,7 @@ import (
 
 var (
 	udpPort1 = flag.Int("udp1", 443, "UDP listener #1 address")
-	udpPort2 = flag.Int("udp2", 4001, "UDP listener #2 address")
+	udpPort2 = flag.Int("udp2", 8443, "UDP listener #2 address")
 )
 
 func main() {

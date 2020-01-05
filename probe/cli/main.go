@@ -252,7 +252,7 @@ func resolveProbeAddrs() (*EightTuple, error) {
 			continue
 		}
 		ret.A1 = &net.UDPAddr{IP: addr.IP.To4(), Port: 443}
-		ret.A2 = &net.UDPAddr{IP: addr.IP.To4(), Port: 4001}
+		ret.A2 = &net.UDPAddr{IP: addr.IP.To4(), Port: 8443}
 	}
 
 	addrs, err = net.DefaultResolver.LookupIPAddr(context.Background(), "natprobe2.universe.tf.")
@@ -264,7 +264,7 @@ func resolveProbeAddrs() (*EightTuple, error) {
 			continue
 		}
 		ret.B1 = &net.UDPAddr{IP: addr.IP.To4(), Port: 443}
-		ret.B2 = &net.UDPAddr{IP: addr.IP.To4(), Port: 4001}
+		ret.B2 = &net.UDPAddr{IP: addr.IP.To4(), Port: 8443}
 	}
 
 	return ret, nil
