@@ -243,7 +243,7 @@ func (a EightTuple) List() []*net.UDPAddr {
 func resolveProbeAddrs() (*EightTuple, error) {
 	ret := &EightTuple{}
 
-	addrs, err := net.DefaultResolver.LookupIPAddr(context.Background(), "natprobe1.universe.tf")
+	addrs, err := net.DefaultResolver.LookupIPAddr(context.Background(), "natprobe1.universe.tf.")
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +255,7 @@ func resolveProbeAddrs() (*EightTuple, error) {
 		ret.A2 = &net.UDPAddr{IP: addr.IP.To4(), Port: 4001}
 	}
 
-	addrs, err = net.DefaultResolver.LookupIPAddr(context.Background(), "natprobe2.universe.tf")
+	addrs, err = net.DefaultResolver.LookupIPAddr(context.Background(), "natprobe2.universe.tf.")
 	if err != nil {
 		return nil, err
 	}
