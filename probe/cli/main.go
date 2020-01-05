@@ -263,7 +263,7 @@ func resolveProbeAddrs() (*EightTuple, error) {
 		if addr.IP.To4() == nil {
 			continue
 		}
-		ret.B1 = &net.UDPAddr{IP: addr.IP.To4(), Port: 3500}
+		ret.B1 = &net.UDPAddr{IP: addr.IP.To4(), Port: 443}
 		ret.B2 = &net.UDPAddr{IP: addr.IP.To4(), Port: 4001}
 	}
 
