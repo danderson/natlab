@@ -4,13 +4,14 @@ import (
 	"encoding/binary"
 	"flag"
 	"net"
+	"strconv"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 )
 
 var (
-	udpPort1 = flag.Int("udp1", 443, "UDP listener #1 address")
-	udpPort2 = flag.Int("udp2", 8443, "UDP listener #2 address")
+	ports = flag.String("ports", "80,443,500,1194,1701,1723,3478,4500,5060,5061,51820,60000", "UDP listener ports")
 )
 
 func main() {
@@ -22,7 +23,10 @@ func main() {
 		logrus.Warn("Not enough public IPs available to provide a useful testing server")
 	}
 
-	ports := []int{*udpPort1, *udpPort2}
+	ports, err := parsePorts()
+	if err != nil {
+		logrus.Fatalf("Failed to parse ports: %s", err)
+	}
 
 	server := &server{}
 
@@ -46,6 +50,18 @@ func main() {
 	select {}
 }
 
+func parsePorts() ([]int, error) {
+	ret := []int{}
+	for _, port := range strings.Split(*ports, ",") {
+		i, err := strconv.Atoi(port)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, i)
+	}
+	return ret, nil
+}
+
 type server struct {
 	conns []*net.UDPConn
 }
@@ -58,14 +74,23 @@ func (s *server) handle(conn *net.UDPConn) error {
 			logrus.Errorf("Reading on %s: %s", conn.LocalAddr(), err)
 		}
 		if n != 180 {
-			logrus.Infof("Received malformed %d byte packet from %s", n, addr)
+			logrus.Infof("Received malformed %d byte packet from %s on %s", n, addr, conn.LocalAddr())
 			continue
 		}
 
-		key := buf[0]
-		respConn := conn
-		if key > 0 {
-			respConn = s.conns[int(key-1)%len(s.conns)]
+		varyAddr, varyPort := buf[0] == 1, buf[1] == 1
+		var respConn *net.UDPConn
+		for _, c := range s.conns {
+			myaddr := conn.LocalAddr().(*net.UDPAddr)
+			uaddr := c.LocalAddr().(*net.UDPAddr)
+			if uaddr.IP.Equal(myaddr.IP) == varyAddr {
+				continue
+			}
+			if (uaddr.Port == myaddr.Port) == varyPort {
+				continue
+			}
+			respConn = c
+			break
 		}
 
 		copy(buf[:16], addr.IP.To16())
@@ -75,7 +100,7 @@ func (s *server) handle(conn *net.UDPConn) error {
 			continue
 		}
 
-		logrus.Infof("Provided NAT mapping to %s via %s", addr, respConn.LocalAddr())
+		logrus.Infof("Provided NAT mapping to %s via %s (varyAddr=%t, varyPort=%t)", addr, respConn.LocalAddr(), varyAddr, varyPort)
 	}
 }
 
